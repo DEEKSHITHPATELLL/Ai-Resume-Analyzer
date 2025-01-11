@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Resume Analyzer</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-light: #818cf8;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --gray-50: #f9fafb;
+            --gray-100: #f3f4f6;
+            --gray-200: #e5e7eb;
+            --gray-700: #374151;
+            --gray-800: #1f2937;
+            --gray-900: #111827;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        }
+
+        body {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #f0f7ff 0%, #e8eaff 100%);
+            color: var(--gray-800);
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 3rem;
+            animation: fadeIn 0.8s ease-out;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            color: var(--gray-900);
+            margin-bottom: 1rem;
+        }
+
+        .header p {
+            color: var(--gray-700);
+            font-size: 1.1rem;
+        }
+
+        .upload-section {
+            background: white;
+            border-radius: 1rem;
+            padding: 2rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            max-width: 600px;
+            margin: 0 auto 3rem;
+            animation: slideUp 0.8s ease-out;
+        }
+
+        .file-drop-area {
+            border: 2px dashed var(--primary-light);
+            border-radius: 0.5rem;
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .file-drop-area:hover {
+            border-color: var(--primary);
+            background: var(--gray-50);
+        }
+
+        .file-drop-area.drag-over {
+            border-color: var(--primary);
+            background: var(--gray-100);
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .upload-icon {
+            font-size: 2.5rem;
+            color: var(--primary);
+            margin-bottom: 1rem;
+        }
+
+        .btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn:hover {
+            background: var(--primary-light);
+            transform: translateY(-1px);
+        }
+
+        .btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid var(--gray-200);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        .results {
+            display: none;
+            animation: fadeIn 0.8s ease-out;
+        }
+
+        .tab-navigation {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            overflow-x: auto;
+            padding-bottom: 0.5rem;
+        }
+
+        .tab-button {
+            background: none;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            color: var(--gray-700);
+            font-weight: 500;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+        }
+
+        .tab-button.active {
+            background: white;
+            color: var(--primary);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .tab-content {
+            background: white;
+            border-radius: 1rem;
+            padding: 2rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+        }
+
+        .score-circle {
+            width: 200px;
+            height: 200px;
+            margin: 2rem auto;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .score-circle svg {
+            transform: rotate(-90deg);
+        }
+
+        .score-circle circle {
+            fill: none;
+            stroke-width: 8;
+            stroke-linecap: round;
+        }
+
+        .score-background {
+            stroke: var(--gray-200);
+        }
+
+        .score-progress {
+            stroke: var(--primary);
+            transition: stroke-dashoffset 1s ease-out;
+        }
+
+        .score-text {
+            position: absolute;
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: var(--primary);
+        }
+
+        .skill-badge {
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            background: var(--gray-100);
+            border-radius: 2rem;
+            margin: 0.25rem;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }
+
+        .skill-badge:hover {
+            background: var(--primary);
+            color: white;
+            transform: translateY(-2px);
+        }
+
+        .career-path {
+            background: white;
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            border-left: 4px solid var(--primary);
+            transition: all 0.3s ease;
+        }
+
+        .career-path:hover {
+            transform: translateX(4px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .job-card {
+            background: white;
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            border: 1px solid var(--gray-200);
+            transition: all 0.3s ease;
+        }
+
+        .job-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .match-badge {
+            float: right;
+            padding: 0.25rem 0.75rem;
+            border-radius: 1rem;
+            font-weight: 500;
+        }
+
+        .match-high {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .match-medium {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .match-low {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .skill-tag {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 1rem;
+            margin: 0.25rem;
+            font-size: 0.875rem;
+        }
+
+        .skill-match {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .skill-missing {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .chart-container {
+            height: 300px;
+            margin: 2rem 0;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .tab-navigation {
+                gap: 0.5rem;
+            }
+
+            .tab-button {
+                padding: 0.5rem 1rem;
+                font-size: 0.9rem;
+            }
+
+            .score-circle {
+                width: 150px;
+                height: 150px;
+            }
+
+            .score-text {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>AI Resume Analyzer</h1>
+            <p>Upload your resume and get instant insights powered by AI</p>
+        </header>
+
+        <div class="upload-section">
+            <form id="uploadForm">
+                <div class="file-drop-area" id="dropArea">
+                    <input type="file" class="file-input" id="resume" accept=".pdf,.docx" hidden>
+                    <div class="upload-icon">📄</div>
+                    <p>Drag & drop your resume here or click to browse</p>
+                    <p class="file-name" id="fileName"></p>
+                </div>
+                <div style="text-align: center; margin-top: 1.5rem;">
+                    <button type="submit" class="btn" id="analyzeBtn" disabled>
+                        <span>Analyze Resume</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Analyzing your resume...</p>
+        </div>
+
+        <div class="results" id="results">
+            <div class="tab-navigation" id="tabNavigation">
+                <button class="tab-button active" data-tab="overview">Overview</button>
+                <button class="tab-button" data-tab="skills">Skills Analysis</button>
+                <button class="tab-button" data-tab="career">Career Paths</button>
+                <button class="tab-button" data-tab="jobs">Job Matches</button>
+                <button class="tab-button" data-tab="market">Market Insights</button>
+            </div>
+
+            <div class="tab-content" id="tabContent">
+                <!-- Content will be dynamically inserted here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const dropArea = document.getElementById('dropArea');
+        const fileInput = document.getElementById('resume');
+        const fileName = document.getElementById('fileName');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const loading = document.getElementById('loading');
+        const results = document.getElementById('results');
+        const tabNavigation = document.getElementById('tabNavigation');
+        const tabContent = document.getElementById('tabContent');
+
+        let skillsChart = null;
+        let currentTab = 'overview';
+        let analysisData = null;
+
+        // File Drop Handling
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropArea.addEventListener(eventName, highlight, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, unhighlight, false);
+        });
+
+        function highlight() {
+            dropArea.classList.add('drag-over');
+        }
+
+        function unhighlight() {
+            dropArea.classList.remove('drag-over');
+        }
+
+        dropArea.addEventListener('drop', handleDrop, false);
+        dropArea.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', handleFileSelect);
+
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            handleFiles(files);
+        }
+
+        function handleFileSelect(e) {
+            const files = e.target.files;
+            handleFiles(files);
+        }
+
+        function handleFiles(files) {
+            if (files.length > 0) {
+                const file = files[0];
+                if (file.type === 'application/pdf' || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+                    fileName.textContent = file.name;
+                    analyzeBtn.disabled = false;
+                } else {
+                    alert('Please upload a PDF or DOCX file');
+                    fileName.textContent = '';
+                    analyzeBtn.disabled = true;
+                }
+            }
+        }
+
+        // Form Submission
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData();
+            formData.append('resume', fileInput.files[0]);
+
+            loading.style.display = 'block';
+            results.style.display = 'none';
+
+            try {
+                const response = await fetch('/analyze', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    analysisData = await response.json();
+                    showResults();
+                } else {
+                    throw new Error('Analysis failed');
+                }
+            } catch (error) {
+                alert('Error analyzing resume');
+            } finally {
+                loading.style.display = 'none';
+            }
+        });
+
+        // Tab Navigation
+        tabNavigation.addEventListener('click', (e) => {
+            if (e.target.classList.contains('tab-button')) {
+                const tab = e.target.dataset.tab;
+                switchTab(tab);
+            }
+        });
+
+        function switchTab(tab) {
+            currentTab = tab;
+            
+            // Update active tab
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.tab === tab);
+            });
+
+            // Update content
+            updateTabContent();
+        }
+
+        function showResults() {
+            results.style.display = 'block';
+            switchTab('overview');
+        }
+
+        function updateTabContent() {
+            if (!analysisData) return;
+
+            let content = '';
+            switch (currentTab) {
+                case 'overview':
+                    content = generateOverviewContent();
+                    break;
+                case 'skills':
+                    content = generateSkillsContent();
+                    break;
+                case 'career':
+                    content = generateCareerContent();
+                    break;
+                case 'jobs':
+                    content = generateJobsContent();
+                    break;
+                case 'market':
+                    content = generateMarketContent();
+                    break;
+            }
+
+            tabContent.innerHTML = content;
+
+            // Initialize charts if needed
+            if (currentTab === 'skills') {
+                initializeSkillsChart();
+            }
+        }
+
+        function generateOverviewContent() {
+            const score = Math.round(analysisData.score * 100);
+            return `
+                <h2 class="text-2xl font-bold mb-6">Resume Score</h2>
+                <div class="score-circle">
+                    <svg width="100%" height="100%" viewBox="0 0 100 100">
+                        <circle class="score-background" cx="50" cy="50" r="45" />
+                        <circle class="score-progress" cx="50" cy="50" r="45"
+                                stroke-dasharray="282.7"
+                                stroke-dashoffset="${282.7 - (282.7 * score / 100)}" />
+                    </svg>
+                    <div class="score-text">${score}%</div>
+                </div>
+                <div class="recommendations mt-8">
+                    <h3 class="text-xl font-bold mb-4">Key Recommendations</h3>
+                    <ul class="list-disc pl-6">
+                        ${analysisData.career_guidance.recommendations.map(rec => `
+                            <li class="mb-2">${rec}</li>
+                        `).join('')}
+                    </ul>
+                </div>
+            `;
+        }
+
+        function generateSkillsContent() {
+            return `
+                <h2 class="text-2xl font-bold mb-6">Skills Analysis</h2>
+                <div class="chart-container">
+                    <canvas id="skillsChart"></canvas>
+                </div>
+                <div class="skills-list mt-6">
+                    ${analysisData.extracted_info.skills.map(skill => `
+                        <span class="skill-badge">${skill}</span>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function generateCareerContent() {
+            return `
+                <h2 class="text-2xl font-bold mb-6">Career Growth Paths</h2>
+                ${analysisData.career_guidance.career_paths.map(path => `
+                    <div class="career-path">
+                        <h3 class="text-xl font-bold mb-2">${path.role}</h3>
+                        <p class="mb-2">${path.description}</p>
+                        <div class="text-sm font-medium text-primary">
+                            Growth Potential: ${path.growth_potential}
+                        </div>
+                    </div>
+                `).join('')}
+            `;
+        }
+
+        function generateJobsContent() {
+            return `
+                <h2 class="text-2xl font-bold mb-6">Job Matches</h2>
+                ${analysisData.career_guidance.job_opportunities.map(job => {
+                    const matchClass = job.match_percentage >= 80 ? 'match-high' : 
+                                     job.match_percentage >= 50 ? 'match-medium' : 'match-low';
+                    return `
+                        <div class="job-card">
+                            <div class="flex justify-between items-start">
+                                <h3 class="text-xl font-bold">${job.title}</h3>
+                                <span class="match-badge ${matchClass}">${job.match_percentage}% Match</span>
+                            </div>
+                            <p class="my-2">${job.description}</p>
+                            <div class="mb-2">
+                                <strong>Salary Range:</strong> ${job.typical_salary}
+                                <strong class="ml-4">Demand:</strong> ${job.demand_level}
+                            </div>
+                            <div class="mb-2">
+                                <strong>Required Skills:</strong><br>
+                                ${job.required_skills.map(skill => `
+                                    <span class="skill-tag ${job.matching_skills.includes(skill) ? 'skill-match' : 'skill-missing'}">
+                                        ${skill}
+                                    </span>
+                                `).join('')}
+                            </div>
+                            <div>
+                                <strong>Top Companies:</strong> ${job.companies.join(', ')}
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            `;
+        }
+
+        function generateMarketContent() {
+            const insights = analysisData.career_guidance.market_insights;
+            return `
+                <h2 class="text-2xl font-bold mb-6">Market Insights</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <h3 class="text-xl font-bold mb-3">Industry Demand</h3>
+                        <p class="mb-6">${insights.industry_demand}</p>
+                        
+                        <h3 class="text-xl font-bold mb-3">Salary Trends</h3>
+                        <p>${insights.salary_trends}</p>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold mb-3">Emerging Skills</h3>
+                        <div class="mb-6">
+                            ${insights.emerging_skills.map(skill => `
+                                <span class="skill-badge">${skill}</span>
+                            `).join('')}
+                        </div>
+                        
+                        <h3 class="text-xl font-bold mb-3">Top Locations</h3>
+                        ${insights.top_locations.map(location => `
+                            <div class="mb-1">${location}</div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function initializeSkillsChart() {
+            const ctx = document.getElementById('skillsChart').getContext('2d');
+            const featureImportance = analysisData.feature_importance;
+            
+            if (skillsChart) {
+                skillsChart.destroy();
+            }
+
+            skillsChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(featureImportance),
+                    datasets: [{
+                        label: 'Skill Relevance',
+                        data: Object.values(featureImportance),
+                        backgroundColor: 'rgba(79, 70, 229, 0.6)',
+                        borderColor: 'rgba(79, 70, 229, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 1,
+                            ticks: {
+                                callback: value => `${Math.round(value * 100)}%`
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
