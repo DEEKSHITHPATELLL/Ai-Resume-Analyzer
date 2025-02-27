@@ -176,39 +176,33 @@
         }
 
         .score-circle {
+            position: relative;
             width: 200px;
             height: 200px;
             margin: 2rem auto;
-            position: relative;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .score-circle svg {
-            transform: rotate(-90deg);
         }
 
         .score-circle circle {
             fill: none;
             stroke-width: 8;
             stroke-linecap: round;
+            transform: rotate(-90deg);
+            transform-origin: 50% 50%;
+            transition: stroke-dasharray 0.3s ease;
         }
 
         .score-background {
             stroke: var(--gray-200);
         }
 
-        .score-progress {
-            stroke: var(--primary);
-            transition: stroke-dashoffset 1s ease-out;
-        }
-
         .score-text {
             position: absolute;
-            font-size: 2.5rem;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 2rem;
             font-weight: bold;
-            color: var(--primary);
+            color: var(--gray-800);
         }
 
         .skill-badge {
@@ -348,6 +342,98 @@
                 font-size: 2rem;
             }
         }
+
+        .score-section {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        
+        .feature-bars {
+            margin-top: 1rem;
+        }
+        
+        .feature-bar {
+            margin-bottom: 1.5rem;
+        }
+        
+        .feature-label {
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+            color: var(--gray-700);
+        }
+        
+        .bar-container {
+            background: var(--gray-100);
+            border-radius: 0.5rem;
+            height: 1.5rem;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .bar {
+            background: var(--primary);
+            height: 100%;
+            border-radius: 0.5rem;
+            transition: width 0.3s ease;
+        }
+        
+        .bar-value {
+            position: absolute;
+            right: 0.5rem;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--gray-700);
+        }
+        
+        .feature-explanation {
+            margin-top: 0.5rem;
+            font-size: 0.875rem;
+            color: var(--gray-600);
+            font-style: italic;
+        }
+        
+        .career-paths, .job-matches {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .career-path-card, .job-card {
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .career-path-card:hover, .job-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+        }
+        
+        .skills-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        
+        .skill-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            background-color: var(--gray-100);
+            color: var(--gray-700);
+            font-size: 0.875rem;
+            white-space: nowrap;
+        }
+        
+        .skill-section {
+            background-color: var(--gray-50);
+            padding: 1rem;
+            border-radius: 0.5rem;
+        }
+        
+        @media (max-width: 768px) {
+            .career-paths, .job-matches {
+                padding: 1rem;
+            }
+        }
     </style>
 </head>
 <body>
@@ -479,14 +565,19 @@
                     body: formData
                 });
 
-                if (response.ok) {
-                    analysisData = await response.json();
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    analysisData = data;
                     showResults();
+                    console.log('Analysis data:', analysisData); // Debug log
                 } else {
-                    throw new Error('Analysis failed');
+                    const errorMessage = data.error || 'Analysis failed. Please try again.';
+                    alert(errorMessage);
                 }
             } catch (error) {
-                alert('Error analyzing resume');
+                console.error('Error:', error);
+                alert('Error analyzing resume. Please check the file and try again.');
             } finally {
                 loading.style.display = 'none';
             }
@@ -513,8 +604,20 @@
         }
 
         function showResults() {
+            if (!analysisData) {
+                console.error('No analysis data available');
+                return;
+            }
+
             results.style.display = 'block';
             switchTab('overview');
+            
+            // Debug logs
+            console.log('Score:', analysisData.score);
+            console.log('Skills:', analysisData.extracted_info?.skills);
+            console.log('Career paths:', analysisData.career_guidance?.career_paths);
+            
+            updateTabContent();
         }
 
         function updateTabContent() {
@@ -548,29 +651,57 @@
         }
 
         function generateOverviewContent() {
-            const score = Math.round(analysisData.score * 100);
-            return `
-                <h2 class="text-2xl font-bold mb-6">Resume Score</h2>
-                <div class="score-circle">
-                    <svg width="100%" height="100%" viewBox="0 0 100 100">
-                        <circle class="score-background" cx="50" cy="50" r="45" />
-                        <circle class="score-progress" cx="50" cy="50" r="45"
-                                stroke-dasharray="282.7"
-                                stroke-dashoffset="${282.7 - (282.7 * score / 100)}" />
-                    </svg>
-                    <div class="score-text">${score}%</div>
+            const score = analysisData.score * 100;
+            const features = analysisData.feature_importance || {};
+            const explanations = analysisData.explanation || {};
+            
+            let content = `
+                <div class="score-section">
+                    <h3>Resume Score: ${score.toFixed(1)}%</h3>
+                    <div class="score-circle">
+                        <svg width="200" height="200">
+                            <circle class="score-background" cx="100" cy="100" r="90"/>
+                            <circle class="score-progress" cx="100" cy="100" r="90"
+                                style="stroke: ${score > 70 ? 'var(--success)' : score > 40 ? 'var(--warning)' : 'var(--danger)'};
+                                stroke-dasharray: ${score * 5.65}, 565;"/>
+                        </svg>
+                        <div class="score-text">${score.toFixed(1)}%</div>
+                    </div>
                 </div>
+                
+                <div class="analysis-section">
+                    <h3>Analysis Breakdown</h3>
+                    <div class="feature-bars">
+                        ${Object.entries(features).map(([feature, importance]) => {
+                            const featureKey = feature.split('_')[0];
+                            const explanation = explanations[featureKey] || '';
+                            return `
+                                <div class="feature-bar">
+                                    <div class="feature-label">${feature.replace(/_/g, ' ').toUpperCase()}</div>
+                                    <div class="bar-container">
+                                        <div class="bar" style="width: ${(importance * 100).toFixed(1)}%"></div>
+                                        <span class="bar-value">${(importance * 100).toFixed(1)}%</span>
+                                    </div>
+                                    <div class="feature-explanation">${explanation}</div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+
                 <div class="recommendations mt-8">
                     <h3 class="text-xl font-bold mb-4">Key Recommendations</h3>
                     <ul class="list-disc pl-6">
-                        ${analysisData.career_guidance.recommendations.map(rec => `
+                        ${(analysisData.career_guidance?.recommendations || []).map(rec => `
                             <li class="mb-2">${rec}</li>
                         `).join('')}
                     </ul>
                 </div>
             `;
+            
+            return content;
         }
-
+        
         function generateSkillsContent() {
             return `
                 <h2 class="text-2xl font-bold mb-6">Skills Analysis</h2>
@@ -586,51 +717,147 @@
         }
 
         function generateCareerContent() {
-            return `
-                <h2 class="text-2xl font-bold mb-6">Career Growth Paths</h2>
-                ${analysisData.career_guidance.career_paths.map(path => `
-                    <div class="career-path">
-                        <h3 class="text-xl font-bold mb-2">${path.role}</h3>
-                        <p class="mb-2">${path.description}</p>
-                        <div class="text-sm font-medium text-primary">
-                            Growth Potential: ${path.growth_potential}
-                        </div>
+            const careerPaths = analysisData.career_guidance?.career_paths || [];
+            
+            if (!careerPaths || careerPaths.length === 0) {
+                return `
+                    <div class="text-center py-8">
+                        <h2 class="text-2xl font-bold mb-4">Career Paths</h2>
+                        <p class="text-gray-600">No career paths available at the moment.</p>
                     </div>
-                `).join('')}
+                `;
+            }
+
+            return `
+                <h2 class="text-2xl font-bold mb-6">Career Paths</h2>
+                <div class="career-paths grid grid-cols-1 gap-6">
+                    ${careerPaths.map((path, index) => {
+                        const nextSteps = Array.isArray(path.next_steps) ? path.next_steps : [];
+                        const isPrimaryPath = index === 0;
+                        
+                        return `
+                            <div class="career-path-card bg-white rounded-lg shadow-md overflow-hidden
+                                ${isPrimaryPath ? 'border-2 border-primary' : ''}">
+                                <div class="p-6">
+                                    <div class="flex justify-between items-start mb-4">
+                                        <div>
+                                            <h3 class="text-xl font-semibold text-primary">${path.role || 'Career Path'}</h3>
+                                            ${isPrimaryPath ? 
+                                                '<span class="inline-block px-2 py-1 text-sm bg-primary text-white rounded mt-1">Recommended Path</span>' 
+                                                : ''}
+                                        </div>
+                                        <span class="text-lg font-medium text-gray-700">${path.salary_range || 'Salary N/A'}</span>
+                                    </div>
+                                    
+                                    <div class="mb-4">
+                                        <p class="text-gray-600">${path.description || 'No description available'}</p>
+                                    </div>
+
+                                    <div class="mb-4">
+                                        <h4 class="font-medium text-gray-700 mb-2">Growth Potential</h4>
+                                        <p class="text-gray-600">${path.growth_potential || 'Not specified'}</p>
+                                    </div>
+
+                                    <div class="mt-6">
+                                        <h4 class="font-medium text-gray-700 mb-2">Steps to Success</h4>
+                                        <div class="bg-gray-50 rounded-lg p-4">
+                                            <ol class="list-decimal pl-4">
+                                                ${nextSteps.map(step => `
+                                                    <li class="mb-2 text-gray-600">${step}</li>
+                                                `).join('')}
+                                            </ol>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
             `;
         }
 
         function generateJobsContent() {
+            const jobOpportunities = analysisData.career_guidance?.job_opportunities || [];
+            
+            if (!jobOpportunities || jobOpportunities.length === 0) {
+                return `
+                    <div class="text-center py-8">
+                        <h2 class="text-2xl font-bold mb-4">Job Matches</h2>
+                        <p class="text-gray-600">No job matches available at the moment.</p>
+                    </div>
+                `;
+            }
+
             return `
                 <h2 class="text-2xl font-bold mb-6">Job Matches</h2>
-                ${analysisData.career_guidance.job_opportunities.map(job => {
-                    const matchClass = job.match_percentage >= 80 ? 'match-high' : 
-                                     job.match_percentage >= 50 ? 'match-medium' : 'match-low';
-                    return `
-                        <div class="job-card">
-                            <div class="flex justify-between items-start">
-                                <h3 class="text-xl font-bold">${job.title}</h3>
-                                <span class="match-badge ${matchClass}">${job.match_percentage}% Match</span>
+                <div class="job-matches grid grid-cols-1 gap-6">
+                    ${jobOpportunities.map((job, index) => {
+                        const requiredSkills = Array.isArray(job.required_skills) ? job.required_skills : [];
+                        const matchingSkills = Array.isArray(job.matching_skills) ? job.matching_skills : [];
+                        const missingSkills = Array.isArray(job.missing_skills) ? job.missing_skills : [];
+                        const isImmediate = index === 0;
+                        
+                        return `
+                            <div class="job-card bg-white rounded-lg shadow-md overflow-hidden
+                                ${isImmediate ? 'border-2 border-success' : ''}">
+                                <div class="p-6">
+                                    <div class="flex justify-between items-start mb-4">
+                                        <div>
+                                            <h3 class="text-xl font-semibold text-primary">${job.title || 'Position Available'}</h3>
+                                            ${isImmediate ? 
+                                                '<span class="inline-block px-2 py-1 text-sm bg-success text-white rounded mt-1">Ready to Apply</span>' 
+                                                : ''}
+                                        </div>
+                                        <div class="text-right">
+                                            <div class="text-lg font-medium text-gray-700">${job.typical_salary || 'Salary N/A'}</div>
+                                            <span class="inline-block px-3 py-1 rounded-full text-sm font-medium mt-1
+                                                ${job.demand_level?.toLowerCase().includes('high') ? 'bg-success text-white' : 
+                                                job.demand_level?.toLowerCase().includes('medium') ? 'bg-warning text-white' : 
+                                                'bg-gray-200 text-gray-700'}">
+                                                ${job.demand_level || 'Demand N/A'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mb-4">
+                                        <p class="text-gray-600">${job.description || 'No description available'}</p>
+                                    </div>
+
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                        <div class="skill-section">
+                                            <h4 class="font-medium text-gray-700 mb-2">Required Skills</h4>
+                                            <div class="skills-list">
+                                                ${requiredSkills.map(skill => `
+                                                    <span class="skill-badge">${skill}</span>
+                                                `).join('')}
+                                            </div>
+                                        </div>
+
+                                        <div class="skill-section">
+                                            <h4 class="font-medium text-gray-700 mb-2">Your Matching Skills</h4>
+                                            <div class="skills-list">
+                                                ${matchingSkills.map(skill => `
+                                                    <span class="skill-badge bg-success text-white">${skill}</span>
+                                                `).join('')}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    ${missingSkills.length > 0 ? `
+                                        <div class="mb-4">
+                                            <h4 class="font-medium text-gray-700 mb-2">Skills to Develop</h4>
+                                            <div class="skills-list">
+                                                ${missingSkills.map(skill => `
+                                                    <span class="skill-badge bg-warning">${skill}</span>
+                                                `).join('')}
+                                            </div>
+                                        </div>
+                                    ` : ''}
+                                </div>
                             </div>
-                            <p class="my-2">${job.description}</p>
-                            <div class="mb-2">
-                                <strong>Salary Range:</strong> ${job.typical_salary}
-                                <strong class="ml-4">Demand:</strong> ${job.demand_level}
-                            </div>
-                            <div class="mb-2">
-                                <strong>Required Skills:</strong><br>
-                                ${job.required_skills.map(skill => `
-                                    <span class="skill-tag ${job.matching_skills.includes(skill) ? 'skill-match' : 'skill-missing'}">
-                                        ${skill}
-                                    </span>
-                                `).join('')}
-                            </div>
-                            <div>
-                                <strong>Top Companies:</strong> ${job.companies.join(', ')}
-                            </div>
-                        </div>
-                    `;
-                }).join('')}
+                        `;
+                    }).join('')}
+                </div>
             `;
         }
 
@@ -703,6 +930,51 @@
                 }
             });
         }
+        
+        const contentStyles = document.createElement('style');
+        contentStyles.textContent = `
+            .career-paths, .job-matches {
+                max-width: 1200px;
+                margin: 0 auto;
+            }
+            
+            .career-path-card, .job-card {
+                transition: transform 0.2s ease, box-shadow 0.2s ease;
+            }
+            
+            .career-path-card:hover, .job-card:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+            }
+            
+            .skills-list {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.5rem;
+            }
+            
+            .skill-badge {
+                padding: 0.25rem 0.75rem;
+                border-radius: 9999px;
+                background-color: var(--gray-100);
+                color: var(--gray-700);
+                font-size: 0.875rem;
+                white-space: nowrap;
+            }
+            
+            .skill-section {
+                background-color: var(--gray-50);
+                padding: 1rem;
+                border-radius: 0.5rem;
+            }
+            
+            @media (max-width: 768px) {
+                .career-paths, .job-matches {
+                    padding: 1rem;
+                }
+            }
+        `;
+        document.head.appendChild(contentStyles);
     </script>
 </body>
 </html>

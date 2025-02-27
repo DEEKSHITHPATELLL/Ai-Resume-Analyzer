@@ -28,7 +28,7 @@ if not GOOGLE_API_KEY:
     raise ValueError("GOOGLE_API_KEY not found in environment variables")
 
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024 
 app.config['UPLOAD_FOLDER'] = 'uploads'
 
 ALLOWED_EXTENSIONS = {'pdf', 'docx'}
@@ -196,75 +196,139 @@ def extract_text_from_docx(file_content):
 def analyze_resume_with_ai(text):
     """Analyze resume text using Google's Generative AI"""
     try:
-        model = genai.GenerativeModel('gemini-pro')
-        
-        # First, extract skills and basic info
-        skills_prompt = f"""Extract skills, experience, and education from this resume text. Format your response EXACTLY as JSON:
+        model = genai.GenerativeModel('gemini-1.5-pro')
+        skills_prompt = f"""Analyze this resume and extract information. 
+Respond ONLY with a JSON object in this EXACT format:
 {{
-    "skills": ["list", "of", "skills"],
-    "experience": "summary of experience",
-    "education": "summary of education"
+    "skills": ["skill1", "skill2", "skill3"],
+    "experience": "Brief summary of work experience",
+    "education": "Brief summary of education"
 }}
+
+Note: For skills, extract ALL technical skills, soft skills, and domain knowledge.
+Include programming languages, frameworks, tools, methodologies, and soft skills.
 
 Resume text:
 {text}"""
 
         skills_response = model.generate_content(skills_prompt)
+        logger.info(f"AI Skills Response: {skills_response.text}")
+        
+        # Clean the response text to ensure it's valid JSON
+        response_text = skills_response.text.strip()
+        if response_text.startswith('```json'):
+            response_text = response_text[7:]
+        if response_text.endswith('```'):
+            response_text = response_text[:-3]
+        response_text = response_text.strip()
         
         try:
-            extracted_info = json.loads(skills_response.text)
-        except:
-            logger.error("Failed to parse skills response")
+            extracted_info = json.loads(response_text)
+            if not isinstance(extracted_info.get('skills'), list):
+                raise ValueError("Skills must be a list")
+            logger.info(f"Successfully parsed skills: {extracted_info['skills']}")
+        except Exception as e:
+            logger.error(f"Failed to parse skills JSON: {str(e)}")
             extracted_info = {
                 "skills": [],
-                "experience": "",
-                "education": ""
+                "experience": "Failed to extract experience",
+                "education": "Failed to extract education"
             }
+        guidance_prompt = f"""Based on the candidate's skills, experience, and education, provide detailed career guidance.
+Focus on creating UNIQUE and PERSONALIZED recommendations. DO NOT use generic placeholders.
 
-        # Then, get career guidance and job opportunities
-        guidance_prompt = f"""Based on these skills and experience, provide career guidance and job opportunities. Format your response EXACTLY as JSON:
+For each career path and job opportunity, ensure they are DIFFERENT and SPECIFIC to the candidate's background.
+
+The response must be a JSON object following this EXACT format:
 {{
     "career_paths": [
         {{
-            "role": "Software Engineer",
-            "description": "Role description",
-            "growth_potential": "High - explanation",
-            "salary_range": "$XX,XXX - $YY,XXX"
+            "role": "Primary Career Path - Most Suitable Role",
+            "description": "Detailed explanation of why this is the best path based on their current skills",
+            "growth_potential": "Specific growth trajectory with timeline and positions",
+            "salary_range": "Specific salary range with location context",
+            "next_steps": [
+                "Immediate action item to start this path",
+                "Short-term goal (3-6 months)",
+                "Medium-term goal (6-12 months)",
+                "Long-term goal (1-2 years)"
+            ]
+        }},
+        {{
+            "role": "Alternative Career Path - Different Industry/Role",
+            "description": "Why this alternative path could be interesting based on transferable skills",
+            "growth_potential": "Different growth trajectory in this alternative path",
+            "salary_range": "Salary range in this alternative path",
+            "next_steps": [
+                "First step to transition to this path",
+                "Key skills to develop",
+                "Industry connections to make",
+                "Timeline for transition"
+            ]
         }}
     ],
     "recommendations": [
-        "Specific recommendation 1",
-        "Specific recommendation 2"
+        "Specific immediate certification or course to pursue",
+        "Concrete project to build for portfolio",
+        "Industry-specific networking suggestion",
+        "Technical skill to prioritize learning"
     ],
     "job_opportunities": [
         {{
-            "title": "Job Title",
-            "description": "Brief job description",
-            "required_skills": ["skill1", "skill2"],
-            "matching_skills": ["skill1", "skill2"],
-            "missing_skills": ["skill3"],
-            "typical_salary": "$XX,XXX - $YY,XXX",
-            "demand_level": "High/Medium/Low",
-            "companies": ["Company1", "Company2"]
+            "title": "Immediate Job Opportunity",
+            "description": "Role matching current skills - can apply immediately",
+            "required_skills": ["Current technical skill", "Existing soft skill", "Required domain knowledge"],
+            "matching_skills": ["Skills from their profile that match requirements"],
+            "missing_skills": ["Minor skills to develop while working"],
+            "typical_salary": "Current market salary range",
+            "demand_level": "Current market demand with growth rate"
+        }},
+        {{
+            "title": "Future Job Opportunity - After Upskilling",
+            "description": "Role to target after gaining additional skills",
+            "required_skills": ["Advanced technical skill", "Leadership skill", "Specialized domain knowledge"],
+            "matching_skills": ["Transferable skills they already have"],
+            "missing_skills": ["Key skills to develop for this role"],
+            "typical_salary": "Higher salary range after upskilling",
+            "demand_level": "Future market demand projection"
+        }},
+        {{
+            "title": "Alternative Industry Position",
+            "description": "Role in different industry using transferable skills",
+            "required_skills": ["Transferable technical skill", "Industry-specific skill", "Core competency"],
+            "matching_skills": ["Relevant transferable skills"],
+            "missing_skills": ["Industry-specific skills to learn"],
+            "typical_salary": "Salary range in alternative industry",
+            "demand_level": "Demand in alternative industry"
         }}
     ],
     "market_insights": {{
-        "industry_demand": "Description of current market demand",
-        "emerging_skills": ["skill1", "skill2"],
-        "salary_trends": "Description of salary trends",
-        "top_locations": ["Location1", "Location2"]
+        "industry_demand": "Current industry growth rate and future projections",
+        "emerging_skills": ["Most in-demand emerging skill", "Future-critical skill"],
+        "salary_trends": "Specific salary growth rates and market changes",
+        "top_locations": ["Best current location with context", "Emerging hub with growth potential"]
     }}
 }}
 
-Skills and Experience:
+Analyze this resume information and provide SPECIFIC, DIFFERENTIATED recommendations:
 {json.dumps(extracted_info, indent=2)}"""
 
         guidance_response = model.generate_content(guidance_prompt)
+        logger.info(f"AI Guidance Response: {guidance_response.text}")
+        
+        # Clean the guidance response text
+        guidance_text = guidance_response.text.strip()
+        if guidance_text.startswith('```json'):
+            guidance_text = guidance_text[7:]
+        if guidance_text.endswith('```'):
+            guidance_text = guidance_text[:-3]
+        guidance_text = guidance_text.strip()
         
         try:
-            career_guidance = json.loads(guidance_response.text)
-        except:
-            logger.error("Failed to parse career guidance")
+            career_guidance = json.loads(guidance_text)
+            logger.info("Successfully parsed career guidance")
+        except Exception as e:
+            logger.error(f"Failed to parse career guidance: {str(e)}")
             career_guidance = {
                 "career_paths": [],
                 "recommendations": [],
@@ -276,8 +340,6 @@ Skills and Experience:
                     "top_locations": []
                 }
             }
-
-        # Calculate feature importance
         skills = extracted_info.get("skills", [])
         
         # Categorize skills
@@ -293,49 +355,83 @@ Skills and Experience:
         ])]
         
         domain_skills = [s for s in skills if s not in technical_skills and s not in soft_skills]
+        def calculate_feature_importance():
+            features = {
+                'technical_skills': len(technical_skills) / 10,  
+                'soft_skills': len(soft_skills) / 5,  
+                'domain_skills': len(domain_skills) / 5, 
+                'experience_quality': 0.0,  
+                'education_quality': 0.0, 
+            }
+            experience = extracted_info.get('experience', '').lower()
+            features['experience_quality'] = sum([
+                0.2 if 'year' in experience else 0.0,
+                0.2 if any(word in experience for word in ['senior', 'lead', 'manager']) else 0.0,
+                0.2 if any(word in experience for word in ['project', 'team']) else 0.0,
+                0.2 if len(experience.split()) > 30 else 0.0,  
+                0.2 if any(word in experience for word in ['achievement', 'success', 'improve', 'develop']) else 0.0
+            ])
+            education = extracted_info.get('education', '').lower()
+            features['education_quality'] = sum([
+                0.25 if any(word in education for word in ['bachelor', 'master', 'phd', 'degree']) else 0.0,
+                0.25 if any(word in education for word in ['computer', 'engineering', 'science', 'technology']) else 0.0,
+                0.25 if len(education.split()) > 20 else 0.0,  
+                0.25 if any(word in education for word in ['university', 'college', 'institute']) else 0.0
+            ])
+            base_score = 0.5  
+            contributions = {}
+            weights = {
+                'technical_skills': 0.3,
+                'soft_skills': 0.2,
+                'domain_skills': 0.2,
+                'experience_quality': 0.2,
+                'education_quality': 0.1
+            }
+            
+            total_contribution = 0
+            for feature, value in features.items():
+                contribution = value * weights[feature]
+                contributions[feature] = contribution
+                total_contribution += contribution
+            normalized_contributions = {k: v/total_contribution for k, v in contributions.items()}
+            final_score = base_score + (total_contribution / 2)  
+            
+            return {
+                'score': min(max(final_score, 0), 1),  
+                'contributions': normalized_contributions,
+                'feature_values': features,
+                'explanation': {
+                    'technical_skills': f"Found {len(technical_skills)} technical skills",
+                    'soft_skills': f"Found {len(soft_skills)} soft skills",
+                    'domain_skills': f"Found {len(domain_skills)} domain-specific skills",
+                    'experience': "Senior/Lead role detected" if features['experience_quality'] > 0.6 
+                                else "Mid-level experience detected" if features['experience_quality'] > 0.3 
+                                else "Junior/Entry level experience detected",
+                    'education': "Strong educational background" if features['education_quality'] > 0.75
+                                else "Standard educational background" if features['education_quality'] > 0.4
+                                else "Limited educational background"
+                }
+            }
 
-        # Calculate scores
-        tech_score = min(len(technical_skills) * 0.2, 1.0)
-        soft_score = min(len(soft_skills) * 0.2, 1.0)
-        domain_score = min(len(domain_skills) * 0.2, 1.0)
-        experience_score = 0.5 if extracted_info.get("experience") else 0.0
-        education_score = 0.5 if extracted_info.get("education") else 0.0
-
-        feature_importance = {
-            "Technical Skills": tech_score,
-            "Soft Skills": soft_score,
-            "Domain Knowledge": domain_score,
-            "Experience": experience_score,
-            "Education": education_score
-        }
-
-        # Calculate overall score
-        score = sum(feature_importance.values()) / len(feature_importance)
-
-        # Add skill match percentages to job opportunities
-        if "job_opportunities" in career_guidance:
-            for job in career_guidance["job_opportunities"]:
-                required_skills = set(s.lower() for s in job.get("required_skills", []))
-                if required_skills:
-                    user_skills = set(s.lower() for s in skills)
-                    matching = required_skills.intersection(user_skills)
-                    job["match_percentage"] = round(len(matching) / len(required_skills) * 100)
-                else:
-                    job["match_percentage"] = 0
-
-        # Prepare final analysis
-        analysis = {
-            "extracted_info": extracted_info,
-            "career_guidance": career_guidance,
-            "feature_importance": feature_importance,
-            "score": score
-        }
-
-        logger.info(f"Extracted {len(skills)} skills")
-        logger.info(f"Technical skills: {len(technical_skills)}")
-        logger.info(f"Soft skills: {len(soft_skills)}")
-        logger.info(f"Domain skills: {len(domain_skills)}")
+        analysis_scores = calculate_feature_importance()
         
+        analysis = {
+            'extracted_info': extracted_info,
+            'career_guidance': career_guidance,
+            'score': analysis_scores['score'],
+            'feature_importance': analysis_scores['contributions'],
+            'feature_values': analysis_scores['feature_values'],
+            'explanation': analysis_scores['explanation']
+        }
+
+        logger.info(f"Analysis score: {analysis['score']:.2f}")
+        logger.info("Feature importance:")
+        for feature, importance in analysis['feature_importance'].items():
+            logger.info(f"- {feature}: {importance:.2f}")
+        logger.info("Explanations:")
+        for feature, explanation in analysis['explanation'].items():
+            logger.info(f"- {feature}: {explanation}")
+            
         return analysis
             
     except Exception as e:
@@ -403,7 +499,6 @@ def analyze():
             logger.error(f"Invalid file type: {filename}")
             return jsonify({'error': 'Invalid file type. Please upload PDF or DOCX only.'}), 400
 
-        # Read file content
         file_content = file.read()
         if not file_content:
             logger.error("Empty file content")
@@ -411,7 +506,6 @@ def analyze():
             
         logger.info(f"Processing file: {filename} ({len(file_content)} bytes)")
 
-        # Extract text based on file type
         file_extension = filename.rsplit('.', 1)[1].lower()
         if file_extension == 'pdf':
             text = extract_text_from_pdf(file_content)
@@ -433,25 +527,42 @@ def analyze():
                 }
             }), 400
 
-        # Log first few characters for debugging
         preview = text[:200].replace('\n', ' ')
         logger.info(f"Extracted text preview: {preview}...")
 
-        # Analyze with AI
         analysis = analyze_resume_with_ai(text)
         if not analysis:
+            logger.error("AI analysis returned None")
             return jsonify({'error': 'Failed to analyze resume content'}), 500
 
-        # Prepare response
-        response = {
-            'score': float(analysis['score']),
-            'feature_importance': analysis['feature_importance'],
-            'extracted_info': analysis['extracted_info'],
-            'career_guidance': analysis['career_guidance']
-        }
+        required_keys = ['score', 'feature_importance', 'extracted_info', 'career_guidance']
+        missing_keys = [key for key in required_keys if key not in analysis]
+        if missing_keys:
+            logger.error(f"Analysis missing required keys: {missing_keys}")
+            return jsonify({'error': f'Incomplete analysis data. Missing: {missing_keys}'}), 500
 
-        logger.info("Analysis completed successfully")
-        return jsonify(response)
+       
+        try:
+            response = {
+                'score': float(analysis['score']),
+                'feature_importance': analysis['feature_importance'],
+                'extracted_info': analysis['extracted_info'],
+                'career_guidance': analysis['career_guidance'],
+                'feature_values': analysis['feature_values'],
+                'explanation': analysis['explanation'],
+                'success': True
+            }
+            
+            
+            logger.info(f"Response size: {len(str(response))} characters")
+            logger.info(f"Analysis score: {response['score']}")
+            logger.info(f"Number of skills: {len(response['extracted_info'].get('skills', []))}")
+            
+            return jsonify(response)
+            
+        except Exception as e:
+            logger.error(f"Error preparing response: {str(e)}")
+            return jsonify({'error': 'Error preparing analysis results'}), 500
 
     except Exception as e:
         logger.error(f"Error during analysis: {str(e)}")
@@ -459,7 +570,7 @@ def analyze():
 
 if __name__ == '__main__':
     try:
-        # Check dependencies before starting server
+       
         try:
             import pytesseract
             if not os.path.exists("C:\\Program Files\\Tesseract-OCR\\tesseract.exe"):
@@ -480,7 +591,7 @@ if __name__ == '__main__':
             logger.error(f"Failed to initialize Gemini API: {str(e)}")
             raise
             
-        # Try different ports if default is busy
+        
         ports = [5000, 8000, 8080, 3000]
         for port in ports:
             try:
@@ -488,7 +599,7 @@ if __name__ == '__main__':
                 app.run(host='127.0.0.1', port=port, debug=True, use_reloader=False)
                 break
             except OSError as e:
-                if port == ports[-1]:  # Last port attempt
+                if port == ports[-1]: 
                     logger.error(f"Could not bind to any port. Last error: {str(e)}")
                     raise
                 else:
